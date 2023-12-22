@@ -1,0 +1,710 @@
+{% comment %}
+***************************************************************************************
+REFERENCES
+Title: Maps JavaScript API
+Author: Google
+Date: 12/3/2023
+Code version: 3.55.3
+URL: https://developers.google.com/maps/documentation/javascript/overview#maps_map_simple-javascript
+Software License: Google Maps Platform License
+***************************************************************************************
+{% endcomment %}
+
+{% load bootstrap5 %}
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+<script defer src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&callback=initMap&libraries=places">
+</script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<nav class="navbar navbar-expand-lg navbar-light bg-body-tertiary border-bottom">
+    <div class="container-fluid" style="margin-left: 30px; margin-right: 30px; width: 2500px;">
+        <a class="navbar-brand d-flex align-items-center" href="">
+            <i class="bi bi-map" style="font-size: 28px; margin-right: 8px;"></i>
+            UVA Tour Guide App
+        </a>
+        <p class="lead" style="margin-bottom: 0px;">Welcome User, {{ request.user.first_name }} {{ request.user.last_name }}!</p>
+        <div class="d-flex justify-content-end align-items-center">
+            <p class="mb-0 me-3">Account Name: {{ request.user.username }}</p>
+            <a href="{% url 'account_logout' %}" class="btn btn-danger btn-sm" role="button">Logout</a>
+        </div>
+    </div>
+</nav>  
+<div class="container mt-3" id="message_container">
+    {% if messages %}
+        {% for message in messages %}
+            {% if "You have signed out" not in message.message|safe %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var messageContainers = document.querySelectorAll("#message_container .alert");
+
+        if (messageContainers.length > 0) {
+            messageContainers.forEach(function(messageContainer) {
+                setTimeout(function() {
+                    messageContainer.style.opacity = '0';
+                    setTimeout(function() {
+                        messageContainer.remove();
+                    }, 400);
+                }, 15000);
+            });
+        }
+    });
+</script>
+<br>
+<div class="container-fluid">
+    <div class="row" style="margin-left: 15px; margin-right: 15px;">
+        <div class="col-md-2 bg-light" style="padding-top: 10px; margin-bottom: 15px;">
+            <select class="form-select" id="optionsDropdown">
+                <option value="#popular-locations" selected>Popular Locations</option>
+                <option value="#location-reviews-tab">Location Reviews</option>
+                <option value="#add-review">Add Review</option>
+            </select>
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="popular-locations" role="tabpanel" aria-labelledby="popular-locations-tab">
+                    <style>
+                        .scrollable-panel::-webkit-scrollbar {
+                            width: 10px; 
+                        }
+                
+                        .scrollable-panel::-webkit-scrollbar-track {
+                            background: #f0f0f0; 
+                        }
+                
+                        .scrollable-panel::-webkit-scrollbar-thumb {
+                            background-color: #888; 
+                            border-radius: 10px; 
+                        }
+                
+                        .scrollable-panel::-webkit-scrollbar-thumb:hover {
+                            background-color: #666; 
+                        }
+                
+                        .scrollable-panel {
+                            max-height: 465px; 
+                            overflow-y: auto; 
+                        }
+                
+                        .list-group-item {
+                            padding: 8px 16px; 
+                            font-size: 12px; 
+                        }
+                    </style>
+                    <div>
+                        <br>
+                        <div class="list-group scrollable-panel">
+                            {% if highest_rated_locations %}
+                                {% for location in highest_rated_locations %}
+                                    <a href="#" class="list-group-item list-group-item-action">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span>{{ location.location }}</span>
+                                            <span class="badge bg-primary rounded-pill">Avg Rating: {{ location.avg_rating }}</span>
+                                        </div>
+                                    </a>
+                                {% endfor %}
+                            {% else %}
+                                <p>No popular locations found.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="location-reviews-tab" role="tabpanel" aria-labelledby="location-reviews-tab">
+                    <form method="post" class="needs-validation">
+                        {% csrf_token %}
+                        <input type="hidden" name="current_tab1" id="current_tab_input1" value="">
+                        <div class="row">
+                            <div class="col-md-12 mt-3">
+                                <div class="form-group">
+                                    <input id="location-reviews" name="location-reviews" class="form-control" style="width: 100%;" placeholder="Enter location for reviews" {% if location %} value="{{ location }}" {% endif %} required>
+                                </div>
+                            </div>
+                            <div class="col-md-12">
+                                <button type="submit" class="text-white btn btn-primary btn-sm" style="width: 100%;">Search Reviews</button>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="location-image-container"> </div>
+                    <div class="scrollable-panel" style="height: 390px;">
+                        <div class="container" id="reviews-container">
+                            {% if location %}
+                                <h6>Location Reviews for: {{ location }}</h6>
+                                <label for="sort">Sort by:</label>
+                                <select id="sort" class="form-select" onchange="sortReviews(this.value)">
+                                    <option value="asc">Lowest Rating</option>
+                                    <option value="desc">Highest Rating</option>
+                                </select>
+                                {% for review in verified_reviews %}
+                                <div class="review-container border border-primary rounded p-3 mb-3 mt-3">
+                                        <h6 class="rating" data-value="{{ review.rating }}">
+                                            {% if review.rating == 1 %}
+                                                ★☆☆☆☆
+                                            {% elif review.rating == 2 %}
+                                                ★★☆☆☆
+                                            {% elif review.rating == 3 %}
+                                                ★★★☆☆
+                                            {% elif review.rating == 4 %}
+                                                ★★★★☆
+                                            {% elif review.rating == 5 %}
+                                                ★★★★★
+                                            {% else %}
+                                                No rating
+                                            {% endif %}
+                                        </h6>
+                                        <p style="font-size: 14px;">{{ review.comments }}</p>
+                                        <p class="user-info" style="font-size: 12px;">
+                                            Review by {{ review.user.get_full_name }} on {{ review.created_at|date:"F d, Y" }}
+                                        </p>
+                                    </div>
+                                {% empty %}
+                                    <p>No verified reviews found for this location.</p>
+                                {% endfor %}
+                            {% endif %}
+                            <script>
+                                function sortReviews(order) {
+                                    var reviewsContainer = document.getElementById('reviews-container');
+                                    var reviews = Array.from(reviewsContainer.getElementsByClassName('review-container'));
+                            
+                                    reviews.sort(function (a, b) {
+                                        var ratingA = parseInt(a.querySelector('.rating').dataset.value);
+                                        var ratingB = parseInt(b.querySelector('.rating').dataset.value);
+                            
+                                        if (order === 'asc') {
+                                            return ratingA - ratingB;
+                                        } else {
+                                            return ratingB - ratingA;
+                                        }
+                                    });
+                            
+                                    reviews.forEach(function (review) {
+                                        reviewsContainer.appendChild(review);
+                                    });
+                                }
+                            </script>
+                        </div>   
+                    </div>       
+                </div>
+                <div class="tab-pane fade" id="add-review" role="tabpanel" aria-labelledby="add-review-tab">
+                    <form method="post"  action="" class="needs-validation">
+                        {% csrf_token %}
+                        <input type="hidden" name="current_tab2" id="current_tab_input2" value="">
+                        <div class="form-group">
+                            <label for="location-field">Location</label>
+                            <input id="review-location" name="location" class="form-control" placeholder="Enter location" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="rating">Rating</label>
+                            <select class="form-control" id="rating" name="rating" required>
+                                <option value="" disabled selected>Select your rating</option>
+                                <option value="1">1 Star</option>
+                                <option value="2">2 Stars</option>
+                                <option value="3">3 Stars</option>
+                                <option value="4">4 Stars</option>
+                                <option value="5">5 Stars</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="id_comments">Comments</label>
+                            <textarea class="form-control" id="id_comments" name="comments" rows="3" required></textarea>
+                        </div>
+                        <br>
+                        <button type="submit" class="btn btn-success">Submit Review</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <script>
+            document.getElementById('optionsDropdown').addEventListener('change', function() {
+                var selectedOption = this.value;
+                $('.tab-pane').removeClass('show active');
+                $(selectedOption).addClass('show active');
+
+                console.log(selectedOption)
+                switch(selectedOption){
+                    case "#location-reviews-tab":
+                        document.getElementById('optionsDropdown').value = "#location-reviews-tab";
+                        document.getElementById('current_tab_input1').value = selectedOption;
+                        document.getElementById('current_tab_input2').value = "";
+                        break;
+                    case "#add-review":
+                        document.getElementById('optionsDropdown').value = "#add-review";
+                        document.getElementById('current_tab_input2').value = selectedOption;
+                        document.getElementById('current_tab_input1').value = "";
+                        break;
+                    default: 
+                        document.getElementById('optionsDropdown').value = "#popular-locations";
+                }
+            });
+
+            document.querySelectorAll('#popular-locations .list-group-item').forEach(function(item) {
+                item.addEventListener('click', function(event) {
+                    if (this.classList.contains('list-group-item')) {
+                        var selectedLocation = this.querySelector('span').textContent.trim();
+            
+                        document.getElementById('optionsDropdown').value = "#location-reviews-tab";
+                        var event = new Event('change');
+                        document.getElementById('optionsDropdown').dispatchEvent(event);
+            
+                        document.getElementById('location-reviews').value = selectedLocation;
+            
+                        var form = document.querySelector('#location-reviews-tab form');
+                        var submitButton = form.querySelector('button[type="submit"]');
+                        submitButton.addEventListener('click', function(e) {
+                            e.preventDefault();  
+
+                            form.submit();  
+                        }, false);
+                        
+                        var clickEvent = new Event('click');
+                        submitButton.dispatchEvent(clickEvent);
+                    }
+                });
+            });
+
+            function restoreDropdownValue() {
+                var savedValue = localStorage.getItem('savedDropdownValue');
+                if (savedValue) {
+                    document.getElementById('optionsDropdown').value = savedValue;
+                    localStorage.removeItem('savedDropdownValue'); // Clear the saved value
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const selectedTab = "{{ selected_tab }}"; 
+                console.log(selectedTab)
+                if (selectedTab) {
+                    $(document).ready(function() {
+                        $('.nav-link').removeClass('active');
+                        $(`a[href="${selectedTab}"]`).addClass('active');
+                        $('.tab-pane').removeClass('show active');
+                        $(selectedTab).addClass('show active');
+
+                        switch(selectedTab){
+                            case "#location-reviews-tab":
+                                document.getElementById('optionsDropdown').value = "#location-reviews-tab";
+                                document.getElementById('current_tab_input1').value = selectedTab;
+                                document.getElementById('current_tab_input2').value = "";
+                                break;
+                            case "#add-review":
+                                document.getElementById('optionsDropdown').value = "#add-review";
+                                document.getElementById('current_tab_input2').value = selectedTab;
+                                document.getElementById('current_tab_input1').value = "";
+                                break;
+                            default: 
+                                document.getElementById('optionsDropdown').value = "#popular-locations"; 
+                        }
+                    });
+                }
+                restoreDropdownValue();
+            });
+        </script>    
+        <div class="col-md-10">
+            <div class="jumbotron">
+                <div class="d-flex align-items-center">
+                    <input id="start" class="form-control" style="width: 300px;" placeholder="Enter starting location">
+                    <input id="end" class="form-control" style="width: 300px;" placeholder="Enter destination location">
+                    <button id="get-route" class="btn btn-primary btn-sm" style="width: 200px; height: 36px;">Get Route</button>
+                    <input id="location-search" class="form-control" style="width: 50%; margin-left: 20%" placeholder="Find building/location">
+                    <select id="category-search" class="form-select" style="width: 50%;">
+                        <option value="">Search by Category</option>
+                        <option value="accounting">Accounting</option>
+                        <option value="airport">Airport</option>
+                        <option value="amusement_park">Amusement Park</option>
+                        <option value="aquarium">Aquarium</option>
+                        <option value="art_gallery">Art Gallery</option>
+                        <option value="atm">ATM</option>
+                        <option value="bakery">Bakery</option>
+                        <option value="bank">Bank</option>
+                        <option value="bar">Bar</option>
+                        <option value="beauty_salon">Beauty Salon</option>
+                        <option value="bicycle_store">Bicycle Store</option>
+                        <option value="book_store">Book Store</option>
+                        <option value="bowling_alley">Bowling Alley</option>
+                        <option value="bus_station">Bus Station</option>
+                        <option value="cafe">Cafe</option>
+                        <option value="campground">Campground</option>
+                        <option value="car_dealer">Car Dealer</option>
+                        <option value="car_rental">Car Rental</option>
+                        <option value="car_repair">Car Repair</option>
+                        <option value="car_wash">Car Wash</option>
+                        <option value="casino">Casino</option>
+                        <option value="cemetery">Cemetery</option>
+                        <option value="church">Church</option>
+                        <option value="city_hall">City Hall</option>
+                        <option value="clothing_store">Clothing Store</option>
+                        <option value="convenience_store">Convenience Store</option>
+                        <option value="courthouse">Courthouse</option>
+                        <option value="dentist">Dentist</option>
+                        <option value="department_store">Department Store</option>
+                        <option value="doctor">Doctor</option>
+                        <option value="drugstore">Drugstore</option>
+                        <option value="electrician">Electrician</option>
+                        <option value="electronics_store">Electronics Store</option>
+                        <option value="embassy">Embassy</option>
+                        <option value="fire_station">Fire Station</option>
+                        <option value="florist">Florist</option>
+                        <option value="funeral_home">Funeral Home</option>
+                        <option value="furniture_store">Furniture Store</option>
+                        <option value="gas_station">Gas Station</option>
+                        <option value="gym">Gym</option>
+                        <option value="hair_care">Hair Care</option>
+                        <option value="hardware_store">Hardware Store</option>
+                        <option value="hindu_temple">Hindu Temple</option>
+                        <option value="home_goods_store">Home Goods Store</option>
+                        <option value="hospital">Hospital</option>
+                        <option value="insurance_agency">Insurance Agency</option>
+                        <option value="jewelry_store">Jewelry Store</option>
+                        <option value="laundry">Laundry</option>
+                        <option value="lawyer">Lawyer</option>
+                        <option value="library">Library</option>
+                        <option value="light_rail_station">Light Rail Station</option>
+                        <option value="liquor_store">Liquor Store</option>
+                        <option value="local_government_office">Local Government Office</option>
+                        <option value="locksmith">Locksmith</option>
+                        <option value="lodging">Lodging</option>
+                        <option value="meal_delivery">Meal Delivery</option>
+                        <option value="meal_takeaway">Meal Takeaway</option>
+                        <option value="mosque">Mosque</option>
+                        <option value="movie_rental">Movie Rental</option>
+                        <option value="movie_theater">Movie Theater</option>
+                        <option value="moving_company">Moving Company</option>
+                        <option value="museum">Museum</option>
+                        <option value="night_club">Night Club</option>
+                        <option value="painter">Painter</option>
+                        <option value="park">Park</option>
+                        <option value="parking">Parking</option>
+                        <option value="pet_store">Pet Store</option>
+                        <option value="pharmacy">Pharmacy</option>
+                        <option value="physiotherapist">Physiotherapist</option>
+                        <option value="plumber">Plumber</option>
+                        <option value="police">Police</option>
+                        <option value="post_office">Post Office</option>
+                        <option value="primary_school">Primary School</option>
+                        <option value="real_estate_agency">Real Estate Agency</option>
+                        <option value="restaurant">Restaurant</option>
+                        <option value="roofing_contractor">Roofing Contractor</option>
+                        <option value="rv_park">RV Park</option>
+                        <option value="school">School</option>
+                        <option value="secondary_school">Secondary School</option>
+                        <option value="shoe_store">Shoe Store</option>
+                        <option value="shopping_mall">Shopping Mall</option>
+                        <option value="spa">Spa</option>
+                        <option value="stadium">Stadium</option>
+                        <option value="storage">Storage</option>
+                        <option value="store">Store</option>
+                        <option value="subway_station">Subway Station</option>
+                        <option value="supermarket">Supermarket</option>
+                        <option value="synagogue">Synagogue</option>
+                        <option value="taxi_stand">Taxi Stand</option>
+                        <option value="tourist_attraction">Tourist Attraction</option>
+                        <option value="train_station">Train Station</option>
+                        <option value="transit_station">Transit Station</option>
+                        <option value="travel_agency">Travel Agency</option>
+                        <option value="university">University</option>
+                        <option value="veterinary_care">Veterinary Care</option>
+                        <option value="zoo">Zoo</option>
+                    </select>        
+                </div>
+                <div id="map" style="height: 500px;" class="mb-3"></div>
+                <div id="location-info"></div> 
+            </div>
+    </div>
+</div>
+</div>
+<script>
+    function initMap() {    
+        function clearMap(clearMarkers = false) {
+            directionsRenderer.set('directions', null); 
+            for (const marker of placeMarkers) {
+                marker.setMap(null); 
+            }
+            placeMarkers.length = 0;
+        }
+
+        const directionsService = new google.maps.DirectionsService();
+        const directionsRenderer = new google.maps.DirectionsRenderer();
+        const map = new google.maps.Map(document.getElementById('map'), {
+            zoom: 15,
+            center: { lat: 38.0336, lng: -78.5080 }
+        });
+
+        const inputStart = document.getElementById('start');
+        const inputEnd = document.getElementById('end');
+        const searchBox = new google.maps.places.SearchBox(document.getElementById('location-search'));
+        const reviewLocation = new google.maps.places.SearchBox(document.getElementById('review-location'));
+        const locationReviews = new google.maps.places.SearchBox(document.getElementById('location-reviews'));
+
+        const autocompleteStart = new google.maps.places.Autocomplete(inputStart);
+        const autocompleteEnd = new google.maps.places.Autocomplete(inputEnd);
+
+        const calculateAndDisplayRoute = () => {
+            clearMap();
+            const start = inputStart.value;
+            const end = inputEnd.value;
+            
+            directionsService.route({
+                origin: start,
+                destination: end,
+                travelMode: google.maps.TravelMode.DRIVING,
+            }, (response, status) => {
+                if (status === 'OK') {
+                    directionsRenderer.setDirections(response);
+                } else {
+                    window.alert("Directions request failed due to " + status);
+                }
+            });
+        };
+
+        directionsRenderer.setMap(map);
+        document.getElementById('get-route').addEventListener('click', calculateAndDisplayRoute);
+
+        map.addListener("bounds_changed", () => {
+            searchBox.setBounds(map.getBounds());
+        });
+
+        const markers = [];
+
+        searchBox.addListener('places_changed', function () {
+            clearMap();
+            const places = searchBox.getPlaces();
+
+            if (places.length === 0) {
+                return;
+            }
+
+            markers.forEach((marker) => {
+                marker.setMap(null);
+            });
+            markers.length = 0;
+
+            const bounds = new google.maps.LatLngBounds();
+
+            places.forEach((place) => {
+                if (!place.geometry || !place.geometry.location) {
+                    console.log("Returned place contains no geometry");
+                    return;
+                }
+
+                markers.push(
+                    new google.maps.Marker({
+                        map,
+                        title: place.name,
+                        position: place.geometry.location,
+                    })
+                );
+
+                if (place.geometry.viewport) {
+                    bounds.union(place.geometry.viewport);
+                } else {
+                    bounds.extend(place.geometry.location);
+                }
+            });
+
+            map.fitBounds(bounds);
+        });
+
+        reviewLocation.addListener('places_changed', function () {
+            console.log("place changed");
+            clearMap();
+            const places = reviewLocation.getPlaces();
+
+            if (places.length === 0) {
+                return;
+            }
+
+            markers.forEach((marker) => {
+                marker.setMap(null);
+            });
+            markers.length = 0;
+
+            const bounds = new google.maps.LatLngBounds();
+
+            places.forEach((place) => {
+                if (!place.geometry || !place.geometry.location) {
+                    console.log("Returned place contains no geometry");
+                    return;
+                }
+
+                markers.push(
+                    new google.maps.Marker({
+                        map,
+                        title: place.name,
+                        position: place.geometry.location,
+                    })
+                );
+
+                if (place.geometry.viewport) {
+                    bounds.union(place.geometry.viewport);
+                } else {
+                    bounds.extend(place.geometry.location);
+                }
+            });
+
+            map.fitBounds(bounds);
+        });
+
+        locationReviews.addListener('places_changed', function () {
+            clearMap();
+            const places = locationReviews.getPlaces();
+            const locationInput = document.getElementById('location-reviews');
+
+            if (places.length === 0 || !locationInput) {
+                return;
+            }
+
+            markers.forEach((marker) => {
+                marker.setMap(null);
+            });
+            markers.length = 0;
+
+            const bounds = new google.maps.LatLngBounds();
+
+            places.forEach((place) => {
+                if (!place.geometry || !place.geometry.location) {
+                    console.log("Returned place contains no geometry");
+                    return;
+                }
+
+                markers.push(
+                    new google.maps.Marker({
+                        map,
+                        title: place.name,
+                        position: place.geometry.location,
+                    })
+                );
+
+                if (place.geometry.viewport) {
+                    bounds.union(place.geometry.viewport);
+                } else {
+                    bounds.extend(place.geometry.location);
+                }
+            });
+
+            map.fitBounds(bounds);
+        });
+
+        function sortReviews(order) {
+            var reviewsContainer = document.getElementById('reviews-container');
+            var reviews = Array.from(reviewsContainer.getElementsByClassName('review-container'));
+    
+            reviews.sort(function (a, b) {
+                var ratingA = parseInt(a.querySelector('.rating').dataset.value);
+                var ratingB = parseInt(b.querySelector('.rating').dataset.value);
+    
+                if (order === 'asc') {
+                    return ratingA - ratingB;
+                } else {
+                    return ratingB - ratingA;
+                }
+            });
+    
+            reviews.forEach(function (review) {
+                reviewsContainer.appendChild(review);
+            });
+        }
+
+        document.getElementById('category-search').addEventListener('change', function () {
+            clearMap();
+            const selectedCategory = this.value;
+            
+            if (selectedCategory) {
+                const request = {
+                    location: map.getCenter(),
+                    radius: 5000, 
+                    type: [selectedCategory] 
+                };
+
+                const service = new google.maps.places.PlacesService(map);
+
+                service.nearbySearch(request, function (results, status) {
+                    if (status === google.maps.places.PlacesServiceStatus.OK) {
+                        clearMarkers(); 
+                        createMarkers(results); 
+                    }
+                });
+            }
+        });
+
+        const placeMarkers = [];
+
+
+        function saveDropdownValue() {
+            var selectedValue = document.getElementById('optionsDropdown').value;
+            localStorage.setItem('savedDropdownValue', selectedValue);
+        }
+
+        // Function to restore the dropdown value after form submission
+        function restoreDropdownValue() {
+            var savedValue = localStorage.getItem('savedDropdownValue');
+            if (savedValue) {
+                document.getElementById('optionsDropdown').value = savedValue;
+                localStorage.removeItem('savedDropdownValue'); // Clear the saved value
+            }
+        }
+
+        function clearMarkers() {
+            for (const marker of placeMarkers) {
+                marker.setMap(null);
+            }
+            placeMarkers.length = 0;
+        }
+
+        var initialDropdown; 
+        function createMarkers(places) {
+            const bounds = new google.maps.LatLngBounds();
+
+            for (const place of places) {
+                const marker = new google.maps.Marker({
+                    map: map,
+                    title: place.name,
+                    position: place.geometry.location
+                });
+
+                placeMarkers.push(marker);
+                google.maps.event.addListener(marker, 'click', function(event) {
+                    saveDropdownValue();
+                    var selectedLocation = place.name;
+                    initialDropdown = document.getElementById('optionsDropdown').value; // Store the initial dropdown value
+                    document.getElementById('optionsDropdown').value = "#location-reviews-tab";
+                    var event = new Event('change');
+                    document.getElementById('optionsDropdown').dispatchEvent(event);
+
+                    document.getElementById('location-reviews').value = selectedLocation;
+
+                    var form = document.querySelector('#location-reviews-tab form');
+                    var submitButton = form.querySelector('button[type="submit"]');
+                    submitButton.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        form.submit();
+                        setTimeout(function() {
+                            document.getElementById('optionsDropdown').value = initialDropdown; // Reset the dropdown after form submission
+                        }, 50000); // Adjust delay as needed
+                    }, false);
+
+                    var clickEvent = new Event('click');
+                    submitButton.dispatchEvent(clickEvent);
+                });
+
+                if (place.geometry.viewport) {
+                    bounds.union(place.geometry.viewport);
+                } else {
+                    bounds.extend(place.geometry.location);
+                }
+            }
+
+            map.fitBounds(bounds);
+        }
+    }
+</script>
+
+<footer id="sticky-footer" class="flex-shrink-0 py-4 bg-body-tertiary border-top text-black-50">
+    <div class="container text-center">
+        <small>Copyright &copy; 2023 Vincent Song, Sai Mupparaju, Simon Tan, Spencer Hurst, & Jason Kim.</small>
+    </div>
+</footer>

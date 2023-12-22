@@ -1,0 +1,551 @@
+{% comment %}
+***************************************************************************************
+REFERENCES
+Title: Maps JavaScript API
+Author: Google
+Date: 12/3/2023
+Code version: 3.55.3
+URL: https://developers.google.com/maps/documentation/javascript/overview#maps_map_simple-javascript
+Software License: Google Maps Platform License
+***************************************************************************************
+{% endcomment %}
+
+{% load bootstrap5 %}
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<nav class="navbar navbar-expand-lg navbar-light bg-body-tertiary border-bottom">
+    <div class="container">
+        <a class="navbar-brand d-flex align-items-center" href="">
+            <i class="bi bi-map" style="font-size: 28px; margin-right: 8px;"></i>
+            UVA Tour Guide App
+        </a>
+        <p class="lead" style="margin-bottom: 0px;">Welcome Admin, {{ request.user.first_name }} {{ request.user.last_name }}!</p>
+        <div class="d-flex justify-content-end align-items-center">
+            <p class="mb-0 me-3">Account Name: {{ request.user.username }}</p>
+            <a href="{% url 'account_logout' %}" class="btn btn-danger btn-sm" role="button">Logout</a>
+        </div>
+    </div>
+</nav>  
+<div class="container mt-3" id="message_container">
+    {% if messages %}
+        {% for message in messages %}
+            {% if "You have signed out" not in message.message|safe %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var messageContainers = document.querySelectorAll("#message_container .alert");
+
+        if (messageContainers.length > 0) {
+            messageContainers.forEach(function(messageContainer) {
+                setTimeout(function() {
+                    messageContainer.style.opacity = '0';
+                    setTimeout(function() {
+                        messageContainer.remove();
+                    }, 400);
+                }, 15000);
+            });
+        }
+    });
+</script>
+<div class="container mt-5">
+    <div class="jumbotron">
+        <div class="d-flex align-items-center">
+            <input id="start" class="form-control" style="width: 300px;" placeholder="Enter starting location">
+            <input id="end" class="form-control" style="width: 300px;" placeholder="Enter destination location">
+            <button id="get-route" class="btn btn-primary btn-sm" style="width: 150px; height: 36px;">Get Directions</button>
+            <input id="location-search" class="form-control" style="width: 300px;" placeholder="Search for a building/location">
+            <select id="category-search" class="form-select" style="width: 300px;">
+                <option value="">Select a category</option>
+                <option value="accounting">Accounting</option>
+                <option value="airport">Airport</option>
+                <option value="amusement_park">Amusement Park</option>
+                <option value="aquarium">Aquarium</option>
+                <option value="art_gallery">Art Gallery</option>
+                <option value="atm">ATM</option>
+                <option value="bakery">Bakery</option>
+                <option value="bank">Bank</option>
+                <option value="bar">Bar</option>
+                <option value="beauty_salon">Beauty Salon</option>
+                <option value="bicycle_store">Bicycle Store</option>
+                <option value="book_store">Book Store</option>
+                <option value="bowling_alley">Bowling Alley</option>
+                <option value="bus_station">Bus Station</option>
+                <option value="cafe">Cafe</option>
+                <option value="campground">Campground</option>
+                <option value="car_dealer">Car Dealer</option>
+                <option value="car_rental">Car Rental</option>
+                <option value="car_repair">Car Repair</option>
+                <option value="car_wash">Car Wash</option>
+                <option value="casino">Casino</option>
+                <option value="cemetery">Cemetery</option>
+                <option value="church">Church</option>
+                <option value="city_hall">City Hall</option>
+                <option value="clothing_store">Clothing Store</option>
+                <option value="convenience_store">Convenience Store</option>
+                <option value="courthouse">Courthouse</option>
+                <option value="dentist">Dentist</option>
+                <option value="department_store">Department Store</option>
+                <option value="doctor">Doctor</option>
+                <option value="drugstore">Drugstore</option>
+                <option value="electrician">Electrician</option>
+                <option value="electronics_store">Electronics Store</option>
+                <option value="embassy">Embassy</option>
+                <option value="fire_station">Fire Station</option>
+                <option value="florist">Florist</option>
+                <option value="funeral_home">Funeral Home</option>
+                <option value="furniture_store">Furniture Store</option>
+                <option value="gas_station">Gas Station</option>
+                <option value="gym">Gym</option>
+                <option value="hair_care">Hair Care</option>
+                <option value="hardware_store">Hardware Store</option>
+                <option value="hindu_temple">Hindu Temple</option>
+                <option value="home_goods_store">Home Goods Store</option>
+                <option value="hospital">Hospital</option>
+                <option value="insurance_agency">Insurance Agency</option>
+                <option value="jewelry_store">Jewelry Store</option>
+                <option value="laundry">Laundry</option>
+                <option value="lawyer">Lawyer</option>
+                <option value="library">Library</option>
+                <option value="light_rail_station">Light Rail Station</option>
+                <option value="liquor_store">Liquor Store</option>
+                <option value="local_government_office">Local Government Office</option>
+                <option value="locksmith">Locksmith</option>
+                <option value="lodging">Lodging</option>
+                <option value="meal_delivery">Meal Delivery</option>
+                <option value="meal_takeaway">Meal Takeaway</option>
+                <option value="mosque">Mosque</option>
+                <option value="movie_rental">Movie Rental</option>
+                <option value="movie_theater">Movie Theater</option>
+                <option value="moving_company">Moving Company</option>
+                <option value="museum">Museum</option>
+                <option value="night_club">Night Club</option>
+                <option value="painter">Painter</option>
+                <option value="park">Park</option>
+                <option value="parking">Parking</option>
+                <option value="pet_store">Pet Store</option>
+                <option value="pharmacy">Pharmacy</option>
+                <option value="physiotherapist">Physiotherapist</option>
+                <option value="plumber">Plumber</option>
+                <option value="police">Police</option>
+                <option value="post_office">Post Office</option>
+                <option value="primary_school">Primary School</option>
+                <option value="real_estate_agency">Real Estate Agency</option>
+                <option value="restaurant">Restaurant</option>
+                <option value="roofing_contractor">Roofing Contractor</option>
+                <option value="rv_park">RV Park</option>
+                <option value="school">School</option>
+                <option value="secondary_school">Secondary School</option>
+                <option value="shoe_store">Shoe Store</option>
+                <option value="shopping_mall">Shopping Mall</option>
+                <option value="spa">Spa</option>
+                <option value="stadium">Stadium</option>
+                <option value="storage">Storage</option>
+                <option value="store">Store</option>
+                <option value="subway_station">Subway Station</option>
+                <option value="supermarket">Supermarket</option>
+                <option value="synagogue">Synagogue</option>
+                <option value="taxi_stand">Taxi Stand</option>
+                <option value="tourist_attraction">Tourist Attraction</option>
+                <option value="train_station">Train Station</option>
+                <option value="transit_station">Transit Station</option>
+                <option value="travel_agency">Travel Agency</option>
+                <option value="university">University</option>
+                <option value="veterinary_care">Veterinary Care</option>
+                <option value="zoo">Zoo</option>
+            </select>        
+        </div>
+        <div id="map" style="height: 450px;"></div>
+        <script async defer src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&callback=initMap&libraries=places">
+        </script>
+        <div id="location-info"></div> 
+        <script>
+            function initMap() {    
+                function clearMap() {
+                    directionsRenderer.set('directions', null); 
+                    for (const marker of placeMarkers) {
+                        marker.setMap(null); 
+                    }
+                    placeMarkers.length = 0;
+                }
+
+                const directionsService = new google.maps.DirectionsService();
+                const directionsRenderer = new google.maps.DirectionsRenderer();
+                const map = new google.maps.Map(document.getElementById('map'), {
+                    zoom: 15,
+                    center: { lat: 38.0336, lng: -78.5080 }
+                });
+
+                const inputStart = document.getElementById('start');
+                const inputEnd = document.getElementById('end');
+                const searchBox = new google.maps.places.SearchBox(document.getElementById('location-search'));
+
+                const autocompleteStart = new google.maps.places.Autocomplete(inputStart);
+                const autocompleteEnd = new google.maps.places.Autocomplete(inputEnd);
+                
+                const calculateAndDisplayRoute = () => {
+                    clearMap();
+                    const start = inputStart.value;
+                    const end = inputEnd.value;
+
+                    directionsService.route({
+                        origin: start,
+                        destination: end,
+                        travelMode: google.maps.TravelMode.DRIVING,
+                    }, (response, status) => {
+                        if (status === 'OK') {
+                            directionsRenderer.setDirections(response);
+                        } else {
+                            window.alert("Directions request failed due to " + status);
+                        }
+                    });
+                };
+
+                directionsRenderer.setMap(map);
+                document.getElementById('get-route').addEventListener('click', calculateAndDisplayRoute);
+
+                map.addListener("bounds_changed", () => {
+                    searchBox.setBounds(map.getBounds());
+                });
+
+                const markers = [];
+
+                searchBox.addListener('places_changed', function () {
+                    clearMap();
+                    const places = searchBox.getPlaces();
+
+                    if (places.length === 0) {
+                        return;
+                    }
+
+                    markers.forEach((marker) => {
+                        marker.setMap(null);
+                    });
+                    markers.length = 0;
+
+                    const bounds = new google.maps.LatLngBounds();
+
+                    places.forEach((place) => {
+                        if (!place.geometry || !place.geometry.location) {
+                            console.log("Returned place contains no geometry");
+                            return;
+                        }
+
+                        markers.push(
+                            new google.maps.Marker({
+                                map,
+                                title: place.name,
+                                position: place.geometry.location,
+                            })
+                        );
+
+                        if (place.geometry.viewport) {
+                            bounds.union(place.geometry.viewport);
+                        } else {
+                            bounds.extend(place.geometry.location);
+                        }
+                    });
+
+                    map.fitBounds(bounds);
+                });
+
+                document.getElementById('category-search').addEventListener('change', function () {
+                    clearMap();
+                    const selectedCategory = this.value;
+                    
+                    if (selectedCategory) {
+                        const request = {
+                            location: map.getCenter(),
+                            radius: 5000, 
+                            type: [selectedCategory] 
+                        };
+
+                        const service = new google.maps.places.PlacesService(map);
+
+                        service.nearbySearch(request, function (results, status) {
+                            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                                clearMarkers(); 
+                                createMarkers(results); 
+                            }
+                        });
+                    }
+                });
+
+                const placeMarkers = [];
+
+                function clearMarkers() {
+                    for (const marker of placeMarkers) {
+                        marker.setMap(null);
+                    }
+                    placeMarkers.length = 0;
+                }
+
+                function createMarkers(places) {
+                    const bounds = new google.maps.LatLngBounds();
+
+                    for (const place of places) {
+                        const marker = new google.maps.Marker({
+                            map: map,
+                            title: place.name,
+                            position: place.geometry.location
+                        });
+
+                        placeMarkers.push(marker);
+
+                        if (place.geometry.viewport) {
+                            bounds.union(place.geometry.viewport);
+                        } else {
+                            bounds.extend(place.geometry.location);
+                        }
+                    }
+
+                    map.fitBounds(bounds);
+                }
+            }
+        </script>
+    </div>
+    <br>
+    <h2 class="mb-4">Unverified Reviews</h2>
+    {% if unverified_reviews %}
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col" width="50px">Id <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"></i></th>
+                    <th scope="col">Created At <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" width="110px">Reviewer <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col">Location <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" width="90px">Rating <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" width="450px">Comments <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" class="text-center" width="120px">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for review in unverified_reviews %}
+                <tr>
+                    <td>{{ review.id }}</th>
+                    <td>{{ review.created_at }}</td> 
+                    <td>{{ review.user }}</td>
+                    <td>{{ review.location }}</td>
+                    <td>{{ review.rating }}</td>     
+                    <td class="review-cell">
+                        <div class="review-content" style="max-height: 49px; overflow: hidden;">
+                            {{ review.comments }}
+                        </div>
+                        {% if review.comments|length > 60 %}
+                            <button class="btn btn-sm btn-outline-primary expand-btn">
+                                <i class="bi bi-arrow-down-circle"></i> Expand
+                            </button>                            
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <form method="post" action="{% url 'verify_review' review.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check2-square"></i>
+                            </button>
+                            <button type="submit" class="btn btn-danger" name="action" value="deny">
+                                <i class="bi bi-x-square"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        There are no unverified reviews at the moment.
+    </div>
+    {% endif %}
+    <h2 class="mb-4">Verified Reviews</h2>
+    {% if verified_reviews %}
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col" width="50px">Id <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"></i></th>
+                    <th scope="col">Created At <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" width="110px">Reviewer <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col">Location <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" width="90px">Rating <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" width="450px">Comments <i class="bi bi-arrow-down-up" style="font-size: 0.8rem;"</th>
+                    <th scope="col" class="text-center" width="120px">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for review in verified_reviews %}
+                <tr>
+                    <td>{{ review.id }}</th>
+                    <td>{{ review.created_at }}</td> 
+                    <td>{{ review.user }}</td>
+                    <td>{{ review.location }}</td>
+                    <td>{{ review.rating }}</td>     
+                    <td class="review-cell">
+                        <div class="review-content" style="max-height: 48px; overflow: hidden;">
+                            {{ review.comments }}
+                        </div>
+                        {% if review.comments|length > 60 %}
+                            <button class="btn btn-sm btn-outline-primary expand-btn">
+                                <i class="bi bi-arrow-down-circle"></i> Expand
+                            </button>                            
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center" style="gap: 5px;">
+                            <form>
+                                {% csrf_token %}
+                                <button type="button" class="btn btn-secondary" onclick="openEditModal('{{ review.id }}', '{{ review.location|escapejs }}', '{{ review.rating }}', '{{ review.comments|escapejs }}')">
+                                    <i class="bi bi-pencil-square" style="color: white;"></i>
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'delete_review' review.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this review?')">
+                                    <i class="bi bi-trash3-fill"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>                    
+                </tr>
+                <div class="modal fade" id="editReviewModal" tabindex="-1" aria-labelledby="editReviewModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="editReviewModalLabel">Edit Review</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="editReviewForm" method="post" action="{% url 'edit_review' %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" id="reviewId" name="reviewId" value="">
+                                    <div class="mb-3">
+                                        <label for="editLocation" class="form-label">Location</label>
+                                        <input type="text" class="form-control" id="editLocation" name="editLocation" required>
+                                    </div>
+                                   <div class="mb-3">
+                                        <label for="editRating" class="form-label">Rating</label>
+                                        <input type="number" class="form-control" id="editRating" name="editRating" min="1" max="5" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="editComment" class="form-label">Comment</label>
+                                        <textarea class="form-control" id="editComment" name="editComment" rows="3" required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    function openEditModal(reviewId, location, rating, comment) {
+                        document.getElementById('reviewId').value = reviewId;
+                        document.getElementById('editLocation').value = location;
+                        document.getElementById('editRating').value = rating;
+                        document.getElementById('editComment').value = comment;
+                
+                        var myModal = new bootstrap.Modal(document.getElementById('editReviewModal'));
+                        myModal.show();
+
+                        const inputEditLocation = document.getElementById('editLocation');
+                        const autocompleteEditLocation = new google.maps.places.Autocomplete(inputEditLocation);
+                    }
+                </script>
+                <script async defer src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&callback=initMap&libraries=places">
+                </script>
+                <style>
+                    .pac-container {
+                        z-index: 10000 !important;
+                    }
+                </style>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info" role="alert">
+        There are no verified reviews at the moment.
+    </div>
+    {% endif %}
+    <style>
+        .review-cell {
+            max-height: 49px;
+            overflow: hidden;
+        }
+        .review-content {
+            transition: max-height 0.3s ease-out;
+        }
+        .expanded {
+            margin-bottom: 10px;
+            max-height: none !important;
+            overflow: visible !important;
+        }
+    </style>
+    <script>
+        document.querySelectorAll('.expand-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const cell = this.parentElement;
+                const reviewContent = cell.querySelector('.review-content');
+                reviewContent.classList.toggle('expanded');
+                if (reviewContent.classList.contains('expanded')) {
+                    this.innerHTML = '<i class="bi bi-arrow-up-circle"></i> Collapse';
+                } else {
+                    this.innerHTML = '<i class="bi bi-arrow-down-circle"></i> Expand';
+                }
+            });
+        });
+    </script>
+    <script>
+        function sortTable(table, columnIndex, ascending) {
+            const tbody = table.find('tbody');
+            const rows = tbody.find('tr').get();
+    
+            rows.sort(function (a, b) {
+                const rowDataA = $(a).find('td').eq(columnIndex).text().toUpperCase();
+                const rowDataB = $(b).find('td').eq(columnIndex).text().toUpperCase();
+    
+                if (columnIndex === 0 ) {
+                    return ascending ? rowDataA - rowDataB : rowDataB - rowDataA;
+                } 
+                else if (columnIndex === 1) {
+                    const rowDataA = $(a).find('td').eq(0).text().toUpperCase();
+                    const rowDataB = $(b).find('td').eq(0).text().toUpperCase();
+                    return ascending ? rowDataA - rowDataB : rowDataB - rowDataA;
+                }
+                else {
+                    return ascending ? rowDataA.localeCompare(rowDataB) : rowDataB.localeCompare(rowDataA);
+                }
+            });
+    
+            tbody.empty().append(rows);
+        }
+    
+        $(document).ready(function () {
+            $('th').click(function () {
+                const table = $(this).closest('table');
+                const thIndex = $(this).index();
+                const isAscending = !$(this).hasClass('asc');
+    
+                table.find('th').removeClass('asc desc');
+                $(this).addClass(isAscending ? 'asc' : 'desc');
+    
+                sortTable(table, thIndex, isAscending);
+            });
+        });
+    </script>    
+</div>
+
+<footer id="sticky-footer" class="flex-shrink-0 py-4 bg-body-tertiary border-top text-black-50">
+    <div class="container text-center">
+        <small>Copyright &copy; 2023 Vincent Song, Sai Mupparaju, Simon Tan, Spencer Hurst, & Jason Kim.</small>
+    </div>
+</footer>
